@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 import '../../models/my_app_state.dart';
 
 class JsonField extends StatefulWidget {
-    final String jsonString ;
-    const JsonField({required this.jsonString});
+  final String jsonString;
+  const JsonField({required this.jsonString});
   @override
   State<JsonField> createState() => _JsonFieldState();
 }
@@ -14,16 +14,11 @@ class JsonField extends StatefulWidget {
 class _JsonFieldState extends State<JsonField> {
   late Map<String, dynamic> _jsonMap;
   late Map<String, bool> _isFieldEditing;
-  _JsonFieldState() {
-    print("hello");
-    _isFieldEditing = {};
-  }
   @override
   void initState() {
-    print("von");
     super.initState();
     _parseJson();
-    //_isFieldEditing = {};
+    _isFieldEditing = {};
   }
 
   @override
@@ -50,29 +45,6 @@ class _JsonFieldState extends State<JsonField> {
     }
   }
 
-
-
-  void _deleteField(String key) {
-    setState(() {
-      _removeFieldAndChildren(_jsonMap, key);
-    });
-  }
-
-  void _removeFieldAndChildren(Map<String, dynamic> json, String key) {
-    json.remove(key);
-    json.forEach((nestedKey, nestedValue) {
-      if (nestedValue is Map<String, dynamic>) {
-        _removeFieldAndChildren(nestedValue, key);
-      } else if (nestedValue is List) {
-        for (var item in nestedValue) {
-          if (item is Map<String, dynamic>) {
-            _removeFieldAndChildren(item, key);
-          }
-        }
-      }
-    });
-  }
-
   String _generateUniqueIndex(String path, String key) {
     return '$path/$key';
   }
@@ -88,7 +60,7 @@ class _JsonFieldState extends State<JsonField> {
         final uniqueIndex = _generateUniqueIndex(path, key);
         final isEditing = _isFieldEditing[uniqueIndex] ?? false;
         final value = json[key];
-         var valueGet = key;
+        var valueGet = key;
         return Card(
           elevation: 4,
           margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -99,35 +71,44 @@ class _JsonFieldState extends State<JsonField> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ListTile(
-                title: !isEditing?
-                Text(
-                    key.toString(), style: TextStyle(fontWeight: FontWeight.bold)
-                ) :TextFormField(
-                  initialValue: key.toString(),
-                  onChanged: (newValue){
-                    valueGet = newValue;
-                  },
-                  onEditingComplete: (){
-                    //print("lets figure $json");
-                    if(valueGet != key) {
-                      json[valueGet] = json[key];
-                      print("lets figure $_jsonMap and $json");
-                      _deleteField(key);
-                      app.fieldEdit(_jsonMap) ;
-                    }
-                    setState(() {
-                      _isFieldEditing[uniqueIndex] =false;
-                    });
-                  },
-                ),
-                onTap: (){
+                title: !isEditing
+                    ? Text(key.toString(),
+                        style: TextStyle(fontWeight: FontWeight.bold))
+                    : TextFormField(
+                        initialValue: key.toString(),
+                        onChanged: (newValue) {
+                          print("lets see what do we have here $uniqueIndex");
+                          valueGet = newValue;
+                        },
+                        onEditingComplete: () {
+                          if (valueGet != key) {
+                            var thePath = uniqueIndex.split('/');
+                            thePath.removeAt(0);
+                            updateKeyAndDeleteOriginal(
+                                _jsonMap, thePath, valueGet, false);
+                            app.fieldEdit(_jsonMap);
+                          }
+                          setState(() {
+                            _isFieldEditing[uniqueIndex] = false;
+                          });
+                        },
+                      ),
+                onTap: () {
                   setState(() {
                     _isFieldEditing[uniqueIndex] = true;
                   });
                 },
                 trailing: IconButton(
                   icon: Icon(Icons.delete),
-                  onPressed: () => _deleteField(key),
+                  onPressed: () {
+                    var thePath = uniqueIndex.split('/');
+                    thePath.removeAt(0);
+                    setState(() {
+                      updateKeyAndDeleteOriginal(
+                          _jsonMap, thePath, valueGet, true);
+                      app.fieldEdit(_jsonMap);
+                    });
+                  },
                 ),
               ),
               Padding(
@@ -162,75 +143,94 @@ class _JsonFieldState extends State<JsonField> {
           value: value,
           onChanged: (newValue) {
             setState(() {
-              getLevels(_jsonMap, thePath, newValue);
-              app.fieldEdit(_jsonMap) ;
+              updateValue(_jsonMap, thePath, newValue);
+              app.fieldEdit(_jsonMap);
             });
-
           },
         );
-      }
-      else {
+      } else {
         return GestureDetector(
           onTap: () {
             setState(() {
               _isFieldEditing[value.toString()] = true;
             });
           },
-          child:!isEditing?
-          Text(
-            value.toString(),
-            style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.deepPurpleAccent,
-                fontSize: 18
-            ),
-          ):TextFormField(
-            initialValue: value.toString(),
-            onChanged: (newValue){
-              getLevels(_jsonMap, thePath, newValue);
-              app.fieldEdit(_jsonMap) ;
-            },
-            onEditingComplete: (){
-              setState(() {
-                print("lets see what we get here") ;
-                _isFieldEditing[value.toString()] =false;
-              });
-            },
-          ) ,
+          child: !isEditing
+              ? Text(
+                  value.toString(),
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.deepPurpleAccent,
+                      fontSize: 18),
+                )
+              : TextFormField(
+                  initialValue: value.toString(),
+                  onChanged: (newValue) {
+                    updateValue(_jsonMap, thePath, newValue);
+                    app.fieldEdit(_jsonMap);
+                  },
+                  onEditingComplete: () {
+                    setState(() {
+                      _isFieldEditing[value.toString()] = false;
+                    });
+                  },
+                ),
         );
       }
     }
   }
 
-  void getLevels(var currentLevel, var thePath, dynamic newValue){
-    bool flag = true ;
-    var  p = 0 ;
-    for (int i = 1; i < thePath.length-1; i++) {
-      if(flag && currentLevel[thePath[i]].runtimeType == List<dynamic>){
-        p = int.parse(thePath[i+1]) ;
+  void updateValue(var currentLevel, var thePath, dynamic newValue) {
+    bool flag = true;
+    var p = 0;
+    for (int i = 1; i < thePath.length - 1; i++) {
+      if (flag && currentLevel[thePath[i]].runtimeType == List<dynamic>) {
+        p = int.parse(thePath[i + 1]);
         currentLevel = currentLevel[thePath[i]] as List<dynamic>;
         flag = false;
-      }else {
+      } else {
         var k = thePath[i];
-        if(RegExp(r'^[0-9]+$').hasMatch(thePath[i])){
+        if (RegExp(r'^[0-9]+$').hasMatch(thePath[i])) {
           k = int.parse(thePath[i]);
         }
-        print("here we will deal with the issue ${thePath[i]} and $k");
         currentLevel = currentLevel[k] as Map<String, dynamic>;
-        flag =true;
+        flag = true;
       }
     }
-    if(flag) {
+    if (flag) {
       currentLevel[thePath.last] = newValue;
-    }else{
+    } else {
       currentLevel[p] = newValue;
+    }
+  }
+
+  void updateKeyAndDeleteOriginal(
+      var currentLevel, var thePath, var newKeyName, bool justDelete) {
+    bool flag = true;
+    for (int i = 0; i < thePath.length - 1; i++) {
+      if (flag && currentLevel[thePath[i]].runtimeType == List<dynamic>) {
+        currentLevel = currentLevel[thePath[i]] as List<dynamic>;
+        flag = false;
+      } else {
+        var k = thePath[i];
+        if (RegExp(r'^[0-9]+$').hasMatch(thePath[i])) {
+          k = int.parse(thePath[i]);
+        }
+        currentLevel = currentLevel[k] as Map<String, dynamic>;
+        flag = true;
+      }
+    }
+    if (justDelete) {
+      currentLevel.remove(thePath.last);
+      print("lets check here $currentLevel");
+    } else {
+      var value = currentLevel.remove(thePath.last);
+      currentLevel[newKeyName] = value;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return _jsonMap.isNotEmpty
-        ? _buildJsonTree(_jsonMap, '')
-        : InvalidJson();
+    return _jsonMap.isNotEmpty ? _buildJsonTree(_jsonMap, '') : InvalidJson();
   }
 }

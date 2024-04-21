@@ -124,7 +124,7 @@ class _JsonFieldState extends State<JsonField> {
 
   Widget _buildJsonNode(String key, dynamic value, String path) {
     final app = Provider.of<MyAppState>(context);
-    final isEditing = _isFieldEditing[value.toString()] ?? false;
+    final isEditing = _isFieldEditing['$path-$value'] ?? false;
     if (value is Map<String, dynamic>) {
       return _buildJsonTree(value, path);
     } else if (value is List) {
@@ -153,7 +153,7 @@ class _JsonFieldState extends State<JsonField> {
         return GestureDetector(
           onTap: () {
             setState(() {
-              _isFieldEditing[value.toString()] = true;
+              _isFieldEditing['$path-$value'] = true;
             });
           },
           child: !isEditing
@@ -172,7 +172,7 @@ class _JsonFieldState extends State<JsonField> {
                   },
                   onEditingComplete: () {
                     setState(() {
-                      _isFieldEditing[value.toString()] = false;
+                      _isFieldEditing['$path-$value'] = false;
                     });
                   },
                 ),

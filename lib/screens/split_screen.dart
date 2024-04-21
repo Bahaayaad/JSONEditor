@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/my_app_state.dart';
@@ -9,7 +7,7 @@ class SplitScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = Provider.of<MyAppState>(context);
-    print("vvv");
+    print("hello");
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

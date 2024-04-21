@@ -5,10 +5,8 @@ import 'package:provider/provider.dart';
 import '../../models/my_app_state.dart';
 
 class JsonField extends StatefulWidget {
-  final String jsonString;
-
-  const JsonField({required this.jsonString});
-
+    final String jsonString ;
+    const JsonField({required this.jsonString});
   @override
   State<JsonField> createState() => _JsonFieldState();
 }
@@ -16,37 +14,31 @@ class JsonField extends StatefulWidget {
 class _JsonFieldState extends State<JsonField> {
   late Map<String, dynamic> _jsonMap;
   late Map<String, bool> _isFieldEditing;
-  Map <String, int>? mp;
-  Map <dynamic, int>? myOccurrence;
-
-
   _JsonFieldState() {
-    _isFieldEditing = {}; // Initialize _isFieldEditing here
-    myOccurrence = {};
-    mp = {};
+    print("hello");
+    _isFieldEditing = {};
   }
   @override
   void initState() {
+    print("von");
     super.initState();
     _parseJson();
     //_isFieldEditing = {};
-    myOccurrence = {};
   }
 
   @override
   void didUpdateWidget(JsonField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    mp = {};
     if (widget.jsonString != oldWidget.jsonString) {
+      print("hh");
       _parseJson();
-      _countOccurrence(_jsonMap);
-      myOccurrence = {};
     }
   }
 
   void _parseJson() {
     try {
       final Map<String, dynamic> parsedJson = jsonDecode(widget.jsonString);
+      print("we should get here $parsedJson");
       setState(() {
         _jsonMap = parsedJson;
       });
@@ -81,29 +73,11 @@ class _JsonFieldState extends State<JsonField> {
     });
   }
 
-  void _countOccurrence(dynamic json) {
-    if (json is Map) {
-      json.forEach((key, value) {
-        if (mp!.containsKey(key)) {
-          mp![key] = (mp![key] ?? 1) + 1;
-        } else {
-          mp![key] = 1;
-        }
-        if (value is Map || value is List) {
-          _countOccurrence(value);
-        }
-      });
-    } else if (json is List) {
-      for (var item in json) {
-        _countOccurrence(item);
-      }
-    }
-
+  String _generateUniqueIndex(String path, String key) {
+    return '$path/$key';
   }
 
-  Widget _buildJsonTree(Map<String, dynamic> json) {
-    mp = {};
-    _countOccurrence(_jsonMap);
+  Widget _buildJsonTree(Map<String, dynamic> json, String path) {
     final app = Provider.of<MyAppState>(context);
     return ListView.builder(
       shrinkWrap: true,
@@ -111,8 +85,8 @@ class _JsonFieldState extends State<JsonField> {
       itemCount: json.length,
       itemBuilder: (context, index) {
         final key = json.keys.elementAt(index);
-        final isEditing = _isFieldEditing[key] ?? false;
-        myOccurrence ?[index] = (mp![key]!) ;
+        final uniqueIndex = _generateUniqueIndex(path, key);
+        final isEditing = _isFieldEditing[uniqueIndex] ?? false;
         final value = json[key];
          var valueGet = key;
         return Card(
@@ -132,27 +106,23 @@ class _JsonFieldState extends State<JsonField> {
                   initialValue: key.toString(),
                   onChanged: (newValue){
                     valueGet = newValue;
-                    print("for the sake of testing ----> $index");
-                    app.fieldEdit(_jsonMap, myOccurrence?[index], key, newValue, true);
                   },
                   onEditingComplete: (){
+                    //print("lets figure $json");
                     if(valueGet != key) {
                       json[valueGet] = json[key];
+                      print("lets figure $_jsonMap and $json");
                       _deleteField(key);
+                      app.fieldEdit(_jsonMap) ;
                     }
                     setState(() {
-                      _isFieldEditing[key] =false;
-                      app.updateString();
+                      _isFieldEditing[uniqueIndex] =false;
                     });
                   },
                 ),
                 onTap: (){
                   setState(() {
-                    if(myOccurrence![index] == null){
-                    }
-                    else{
-                    }
-                    _isFieldEditing[key] = true;
+                    _isFieldEditing[uniqueIndex] = true;
                   });
                 },
                 trailing: IconButton(
@@ -162,7 +132,7 @@ class _JsonFieldState extends State<JsonField> {
               ),
               Padding(
                 padding: const EdgeInsets.only(left: 16),
-                child: _buildJsonNode(key, value, index),
+                child: _buildJsonNode(key, value, uniqueIndex),
               ),
             ],
           ),
@@ -171,63 +141,96 @@ class _JsonFieldState extends State<JsonField> {
     );
   }
 
-  Widget _buildJsonNode(String key,dynamic value, int index) {
-    mp = {};
-    _countOccurrence(_jsonMap);
+  Widget _buildJsonNode(String key, dynamic value, String path) {
     final app = Provider.of<MyAppState>(context);
-    final isEditing = _isFieldEditing[value] ?? false;
-    var valueGet = value;
+    final isEditing = _isFieldEditing[value.toString()] ?? false;
     if (value is Map<String, dynamic>) {
-      return _buildJsonTree(value);
+      return _buildJsonTree(value, path);
     } else if (value is List) {
       return ListView.builder(
         shrinkWrap: true,
         physics: ClampingScrollPhysics(),
         itemCount: value.length,
         itemBuilder: (context, index) {
-          return _buildJsonNode(key,value[index], index);
+          return _buildJsonNode(key, value[index], '$path/$index');
         },
       );
     } else {
-      return GestureDetector(
-        onTap: () {
-          setState(() {
-            _isFieldEditing[value] = true;
-          });
-        },
-        child:!isEditing?
-        Text(
-          value.toString(),
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.deepPurpleAccent,
-            fontSize: 18
-          ),
-        ):TextFormField(
-          initialValue: value.toString(),
-          onChanged: (newValue){
-            valueGet = newValue;
-            app.fieldEdit(_jsonMap, myOccurrence?[index], key, newValue, false);
-          },
-          onEditingComplete: (){
-            _jsonMap[key] = value;
-            _deleteField(value);
-            mp = {};
-            _countOccurrence(_jsonMap);
+      var thePath = path.split('/');
+      if (value is bool) {
+        return Switch(
+          value: value,
+          onChanged: (newValue) {
             setState(() {
-              _isFieldEditing[value] =false;
-              app.updateString();
+              getLevels(_jsonMap, thePath, newValue);
+              app.fieldEdit(_jsonMap) ;
+            });
+
+          },
+        );
+      }
+      else {
+        return GestureDetector(
+          onTap: () {
+            setState(() {
+              _isFieldEditing[value.toString()] = true;
             });
           },
-        ) ,
-      );
+          child:!isEditing?
+          Text(
+            value.toString(),
+            style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.deepPurpleAccent,
+                fontSize: 18
+            ),
+          ):TextFormField(
+            initialValue: value.toString(),
+            onChanged: (newValue){
+              getLevels(_jsonMap, thePath, newValue);
+              app.fieldEdit(_jsonMap) ;
+            },
+            onEditingComplete: (){
+              setState(() {
+                print("lets see what we get here") ;
+                _isFieldEditing[value.toString()] =false;
+              });
+            },
+          ) ,
+        );
+      }
+    }
+  }
+
+  void getLevels(var currentLevel, var thePath, dynamic newValue){
+    bool flag = true ;
+    var  p = 0 ;
+    for (int i = 1; i < thePath.length-1; i++) {
+      if(flag && currentLevel[thePath[i]].runtimeType == List<dynamic>){
+        p = int.parse(thePath[i+1]) ;
+        currentLevel = currentLevel[thePath[i]] as List<dynamic>;
+        flag = false;
+      }else {
+        var k = thePath[i];
+        if(RegExp(r'^[0-9]+$').hasMatch(thePath[i])){
+          k = int.parse(thePath[i]);
+        }
+        print("here we will deal with the issue ${thePath[i]} and $k");
+        currentLevel = currentLevel[k] as Map<String, dynamic>;
+        flag =true;
+      }
+    }
+    if(flag) {
+      currentLevel[thePath.last] = newValue;
+    }else{
+      currentLevel[p] = newValue;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return _jsonMap.isNotEmpty
-        ? _buildJsonTree(_jsonMap)
+        ? _buildJsonTree(_jsonMap, '')
         : InvalidJson();
   }
 }

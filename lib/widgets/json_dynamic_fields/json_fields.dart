@@ -138,6 +138,7 @@ class _JsonFieldState extends State<JsonField> {
       );
     } else {
       var thePath = path.split('/');
+      thePath.removeAt(0);
       if (value is bool) {
         return Switch(
           value: value,
@@ -180,10 +181,10 @@ class _JsonFieldState extends State<JsonField> {
     }
   }
 
-  void updateValue(var currentLevel, var thePath, dynamic newValue) {
+  dynamic traversePath(var currentLevel, List<dynamic> thePath) {
     bool flag = true;
-    var p = 0;
-    for (int i = 1; i < thePath.length - 1; i++) {
+    var p;
+    for (int i = 0; i < thePath.length - 1; i++) {
       if (flag && currentLevel[thePath[i]].runtimeType == List<dynamic>) {
         p = int.parse(thePath[i + 1]);
         currentLevel = currentLevel[thePath[i]] as List<dynamic>;
@@ -197,37 +198,35 @@ class _JsonFieldState extends State<JsonField> {
         flag = true;
       }
     }
-    if (flag) {
-      currentLevel[thePath.last] = newValue;
+    return flag ? [currentLevel, thePath.last] : [currentLevel, p];
+  }
+
+  void updateValue(var currentLevel, List<dynamic> thePath, dynamic newValue) {
+    var result = traversePath(currentLevel, thePath);
+    currentLevel = result[0];
+    var indexOrKey = result[1];
+    if (indexOrKey is int) {
+      currentLevel[indexOrKey] = newValue;
     } else {
-      currentLevel[p] = newValue;
+      currentLevel[indexOrKey] = newValue;
     }
   }
 
   void updateKeyAndDeleteOriginal(
-      var currentLevel, var thePath, var newKeyName, bool justDelete) {
-    bool flag = true;
-    for (int i = 0; i < thePath.length - 1; i++) {
-      if (flag && currentLevel[thePath[i]].runtimeType == List<dynamic>) {
-        currentLevel = currentLevel[thePath[i]] as List<dynamic>;
-        flag = false;
-      } else {
-        var k = thePath[i];
-        if (RegExp(r'^[0-9]+$').hasMatch(thePath[i])) {
-          k = int.parse(thePath[i]);
-        }
-        currentLevel = currentLevel[k] as Map<String, dynamic>;
-        flag = true;
-      }
-    }
+      var currentLevel, List<dynamic> thePath, var newKeyName, bool justDelete) {
+    var result = traversePath(currentLevel, thePath);
+    currentLevel = result[0];
+    var keyToRemove = thePath.last;
     if (justDelete) {
-      currentLevel.remove(thePath.last);
+      print("lets figure $currentLevel");
+      currentLevel.remove(keyToRemove);
       print("lets check here $currentLevel");
     } else {
-      var value = currentLevel.remove(thePath.last);
+      var value = currentLevel.remove(keyToRemove);
       currentLevel[newKeyName] = value;
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
